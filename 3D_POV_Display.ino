@@ -1,4 +1,24 @@
+#include <Arduino.h>
 #include <SPI.h>
+
+// Define the pin connections and settings
+const int DATA_PIN = 11;
+const int CLOCK_PIN = 13;
+const int HALL_SENSOR_PIN = 2;  // Hall sensor for detecting the magnet position
+
+// LED Display configuration
+const int NUM_FRAMES = 25;
+const int NUM_ROWS = 7;
+const int NUM_COLS = 8;
+
+
+
+// SPI settings for SK9822 (adjust clock speed as necessary for your setup)
+SPISettings spiSettings(12000000, MSBFIRST, SPI_MODE0);
+
+// Variables for frame timing and synchronization
+volatile int currentFrame = 0;
+volatile bool newFrameReady = false;
 
 const byte image[25][7][8] = {
 	// Slice 0
@@ -253,28 +273,6 @@ const byte image[25][7][8] = {
 	},
 };
 
-#include <Arduino.h>
-#include <SPI.h>
-
-// Define the pin connections and settings
-const int DATA_PIN = 11;
-const int CLOCK_PIN = 13;
-const int HALL_SENSOR_PIN = 2;  // Hall sensor for detecting the magnet position
-
-// LED Display configuration
-const int NUM_FRAMES = 25;
-const int NUM_ROWS = 7;
-const int NUM_COLS = 8;
-
-
-
-// SPI settings for SK9822 (adjust clock speed as necessary for your setup)
-SPISettings spiSettings(12000000, MSBFIRST, SPI_MODE0);
-
-// Variables for frame timing and synchronization
-volatile int currentFrame = 0;
-volatile bool newFrameReady = false;
-
 void setup() {
   pinMode(HALL_SENSOR_PIN, INPUT_PULLUP);
   SPI.begin();
@@ -308,5 +306,3 @@ void updateLEDs() {
 
   SPI.endTransaction();
 }
-
-// Define the image array in your separate C++ file or directly in this sketch if preferred
