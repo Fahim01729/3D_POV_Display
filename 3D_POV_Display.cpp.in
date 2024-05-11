@@ -54,4 +54,3 @@ void updateLEDs() {
   SPI.endTransaction();
 }
 
-// Define the image array in your separate C++ file or directly in this sketch if preferred
