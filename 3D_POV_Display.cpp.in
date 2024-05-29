@@ -1,44 +1,40 @@
-#include <Arduino.h>
-#include <SPI.h>
+
 
 // Define the pin connections and settings
-const int DATA_PIN = 11;
-const int CLOCK_PIN = 13;
+const int DATA_PIN = 11;      // SPI MOSI pin (Master Out Slave In)
+const int CLOCK_PIN = 13;     // SPI SCK pin (Clock)
 const int HALL_SENSOR_PIN = 2;  // Hall sensor for detecting the magnet position
 
 // LED Display configuration
 const int NUM_FRAMES = 25;
-const int NUM_ROWS = 7;
+const int NUM_ROWS = 4;
 const int NUM_COLS = 8;
-
-
 
 // SPI settings for SK9822 (adjust clock speed as necessary for your setup)
 SPISettings spiSettings(12000000, MSBFIRST, SPI_MODE0);
 
 // Variables for frame timing and synchronization
-volatile int currentFrame = 0;
-volatile bool newFrameReady = false;
+int currentFrame = 0;
+unsigned long lastUpdateTime = 0;
+unsigned long frameDuration = 1500 / NUM_FRAMES;  // Duration of each frame in milliseconds
 
 void setup() {
+  pinMode(DATA_PIN, OUTPUT);
+  pinMode(CLOCK_PIN, OUTPUT);
   pinMode(HALL_SENSOR_PIN, INPUT_PULLUP);
-  SPI.begin();
 
-  // Attach an interrupt to the hall sensor pin
-  attachInterrupt(digitalPinToInterrupt(HALL_SENSOR_PIN), onMagnetDetected, FALLING);
+  SPI.begin();
 }
 
 void loop() {
-  if (newFrameReady) {
-    updateLEDs();
-    newFrameReady = false;
+  if (digitalRead(HALL_SENSOR_PIN) == LOW) {
+    unsigned long currentTime = millis();
+    if (currentTime - lastUpdateTime >= frameDuration) {
+      updateLEDs();
+      currentFrame = (currentFrame + 1) % NUM_FRAMES;
+      lastUpdateTime = currentTime;
+    }
   }
-}
-
-void onMagnetDetected() {
-  // Increment frame index and wrap around if necessary
-  currentFrame = (currentFrame + 1) % NUM_FRAMES;
-  newFrameReady = true;
 }
 
 void updateLEDs() {
@@ -53,4 +49,3 @@ void updateLEDs() {
 
   SPI.endTransaction();
 }
-
