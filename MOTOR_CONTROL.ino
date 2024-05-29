@@ -1,5 +1,5 @@
 #include <ESP32Servo.h>
-
+#include <Arduino.h>
 
 // Define pin connections
 static const int encoderPinA = 2; // Pin for encoder input A
@@ -25,6 +25,13 @@ const int ledPin = 13;
 bool motorActive = false; // Tracks whether the motor is active
 int initialSpeed = 1212; // Initial speed for motor start
 int loopCounter = 0;
+
+// Variables for time measurement
+const int encoderTicksPerRotation = 360; // Example value, change according to your encoder
+volatile int ticksSinceLastRotation = 0;
+unsigned long startTime = 0;
+unsigned long endTime = 0;
+volatile bool rotationComplete = false;
 
 void setup() {
   // Setup encoder inputs
@@ -68,6 +75,20 @@ void loop() {
       delay(400);
     }
   }
+
+  // Check if a rotation is complete
+  if (rotationComplete) {
+    endTime = millis();
+    unsigned long rotationTime = endTime - startTime;
+    Serial.print("Time per rotation: ");
+    Serial.print(rotationTime);
+    Serial.println(" ms");
+
+    // Reset for the next rotation
+    startTime = millis();
+    ticksSinceLastRotation = 0;
+    rotationComplete = false;
+  }
 }
 
 // Interrupt handler for encoder pin A
@@ -78,6 +99,7 @@ void readEncoderA() {
     encoderTicks--;
     flagB = false;
     flagA = false;
+    handleEncoderTick();
   } else if (encoderReading == B00000100) {
     flagB = true;
   }
@@ -92,10 +114,17 @@ void readEncoderB() {
     encoderTicks++;
     flagB = false;
     flagA = false;
+    handleEncoderTick();
   } else if (encoderReading == B00001000) {
     flagA = true;
   }
   interrupts();
 }
 
-
+// Handle each encoder tick
+void handleEncoderTick() {
+  ticksSinceLastRotation++;
+  if (ticksSinceLastRotation >= encoderTicksPerRotation) {
+    rotationComplete = true;
+  }
+}
