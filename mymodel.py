@@ -1,20 +1,13 @@
 import numpy as np
 import math
+from random import randint
 import os
 
-# Constants for the display setup
-NUM_FRAMES = 25
-NUM_ROWS = 7     # Number of LED rows
-NUM_COLS = 8     # Number of LEDs per row
-RADIUS_CM = 7.5  # Radius of the strip board in cm
-HEIGHT_CM = 5.0  # Height of the strip board in cm
-
 # Directory to store the output sketches
-output_dir = 'output_sketches'
-
+output_dir = 'output_sketches2'
 template_path = '3D_POV_Display.cpp.in'  # Ensure this path is correct
 
-# declare colour values
+# Declare color values
 black  = 0b000
 blue   = 0b001
 green  = 0b010
@@ -24,152 +17,349 @@ pink   = 0b101
 yellow = 0b110
 white  = 0b111
 
-# Create a function to convert from polar to Cartesian coordinates
-def polar_to_cartesian(angle_deg, z, r):
+### start basics ###
+
+def newImage():
     """
-    Convert polar coordinates to Cartesian coordinates.
-    - angle_deg: angle in degrees
-    - z: vertical position on the strip board
-    - r: radial distance from the center
+    Return an empty numpy 3-D Array with the dimensions of the image
     """
-    angle_rad = math.radians(angle_deg)
-    x = r * math.cos(angle_rad)  # Horizontal coordinate
-    y = r * math.sin(angle_rad)  # Depth coordinate
-    return x, y, z
+    return np.zeros((25, 4, 8), dtype=int)  # Adjusted radius range to 4 (0 to 3)
 
-def initialize_image():
-    """Initialize a 3D numpy array for the image with all LEDs turned off."""
-    return np.zeros((NUM_FRAMES, NUM_ROWS, NUM_COLS), dtype=int)
+def randPoint():
+    """
+    Generate a random point in the defined space
+    """
+    return (randint(0, 24), randint(0, 3), randint(0, 3))  # Adjusted radius range to 3
 
-def plot_point(image, frame, row, col, value):
-    """Plot a single point in the image, ensuring it falls within the display bounds."""
-    if 0 <= frame < NUM_FRAMES and 0 <= row < NUM_ROWS and 0 <= col < NUM_COLS:
-        image[frame][row][col] = value
+def px_to_mm(px, inner_radius_mm=20, gap_mm=12):
+    """
+    Convert pixels to mm based on a specified pixel density for the given radii.
+    
+    Parameters:
+    px (float): The number of pixels to convert.
+    inner_radius_mm (float): The inner radius in mm. Default is 20 mm (2.0 cm).
+    gap_mm (float): The gap between each pixel in mm. Default is 12 mm (1.2 cm).
+    
+    Returns:
+    float: The converted distance in mm.
+    """
+    return inner_radius_mm + px * gap_mm
 
-def draw_sphere(image, center, radius, color):
-    """Draw a sphere within the 3D space covered by the LED display."""
-    cx, cy, cz = center
-    for frame in range(NUM_FRAMES):
-        angle_deg = (frame / NUM_FRAMES) * 360
-        for row in range(NUM_ROWS):
-            z = (row / (NUM_ROWS - 1)) * HEIGHT_CM  # Map row index to height in cm
-            for col in range(NUM_COLS):
-                r = (col / (NUM_COLS - 1)) * RADIUS_CM  # Map col index to radius in cm
-                x, y, _ = polar_to_cartesian(angle_deg, z, r)
-                if (x - cx)**2 + (y - cy)**2 + (_ - cz)**2 <= radius**2:
-                    plot_point(image, frame, row, col, color)
+def cartesian(angle, height, radius, angles=25, inner_radius_mm=20, gap_mm=12):
+    """
+    Convert polar coordinates to cartesian ones.
+    Polar: angle [0-(angles-1)], height [0-3], radius [0-3]
+    Cartesian: x [mm], y [mm], z [mm]
+    """
+    # Convert the radius to mm
+    radius_mm = px_to_mm(radius, inner_radius_mm=inner_radius_mm, gap_mm=gap_mm)
+    
+    # Convert the angle to radians based on the angles range
+    angle_rad = math.radians(angle * (360 / angles))
+    
+    x_mm = math.cos(angle_rad) * radius_mm
+    y_mm = math.sin(angle_rad) * radius_mm
+    
+    # Convert height to mm
+    height_mm = height * gap_mm  # Each height level is separated by 1.2 cm
 
-def draw_line(image, start, end, color):
-    """Draw a line between two points in 3D space."""
-    # This function will need an implementation of a 3D line drawing algorithm like Bresenham's
-    pass
+    return (x_mm, y_mm, height_mm)
 
-def draw_line(image, start, end, color, thickness=1):
-    """Draw a line from start to end in the 3D space with specified thickness."""
-    x0, y0, z0 = start
-    x1, y1, z1 = end
-    dx, dy, dz = abs(x1 - x0), abs(y1 - y0), abs(z1 - z0)
-    sx, sy, sz = (1 if x0 < x1 else -1, 1 if y0 < y1 else -1, 1 if z0 < z1 else -1)
-    if dx >= dy and dx >= dz:
-        p1, p2 = 2 * dy - dx, 2 * dz - dx
-        while x0 != x1:
-            if 0 <= z0 < NUM_ROWS and 0 <= x0 < NUM_COLS:
-                plot_point(image, int(y0 / 360 * NUM_FRAMES), z0, x0, color)
-            x0 += sx
-            if p1 >= 0:
-                y0 += sy
-                p1 -= 2 * dx
-            if p2 >= 0:
-                z0 += sz
-                p2 -= 2 * dx
-            p1 += 2 * dy
-            p2 += 2 * dz
-    # Additional cases for dy being the largest or dz being the largest go here
+def point_dst_3d(p1, p2):
+    """
+    Calculate the Euclidean distance between two 3D points.
+    
+    Parameters:
+    p1 (tuple): The first point (x1, y1, z1).
+    p2 (tuple): The second point (x2, y2, z2).
+    
+    Returns:
+    float: The Euclidean distance between the points.
+    """
+    return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2 + (p1[2] - p2[2])**2)
 
-def draw_hollow_sphere(image, center, inner_radius, outer_radius, color):
-    """Draw a hollow sphere at the center with the specified inner and outer radii."""
-    cx, cy, cz = center
-    for frame in range(NUM_FRAMES):
-        angle_deg = (frame / NUM_FRAMES) * 360
-        for row in range(NUM_ROWS):
-            z = (row / (NUM_ROWS - 1)) * HEIGHT_CM
-            for col in range(NUM_COLS):
-                r = (col / (NUM_COLS - 1)) * RADIUS_CM
-                x, y, _ = polar_to_cartesian(angle_deg, z, r)
-                dist_sq = (x - cx)**2 + (y - cy)**2 + (_ - cz)**2
-                if inner_radius**2 < dist_sq <= outer_radius**2:
-                    plot_point(image, frame, row, col, color)
+def point_line_dst(p, v, w):
+    """
+    Calculate the distance from point p to the line segment vw.
+    
+    Parameters:
+    p (tuple): The point (px, py, pz).
+    v (tuple): The start point of the line segment (vx, vy, vz).
+    w (tuple): The end point of the line segment (wx, wy, wz).
+    
+    Returns:
+    float: The distance from the point to the line segment.
+    """
+    if v == w:
+        return point_dst_3d(p, v)
+    l2 = point_dst_3d(v, w) ** 2
+    t = max(0, min(1, np.dot(np.subtract(p, v), np.subtract(w, v)) / l2))
+    projection = tuple(v[i] + t * (w[i] - v[i]) for i in range(3))
+    return point_dst_3d(p, projection)
 
-def draw_cuboid(image, corner1, corner2, color):
-    """Draw a cuboid specified by the diagonal corners."""
-    x0, y0, z0 = corner1
-    x1, y1, z1 = corner2
-    for x in range(min(x0, x1), max(x0, x1) + 1):
-        for y in range(min(y0, y1), max(y0, y1) + 1):
-            for z in range(min(z0, z1), max(z0, z1) + 1):
-                plot_point(image, int(y / 360 * NUM_FRAMES), z, x, color)
+### start drawing ###
 
-def draw_pyramid(image, base_center, base_size, height, color):
-    """Draw a pyramid with a square base."""
-    cx, cy, cz = base_center
-    half_size = base_size / 2
-    # Draw base
-    for x in range(cx - half_size, cx + half_size + 1):
-        for y in range(cy - half_size, cy + half_size + 1):
-            plot_point(image, int(y / 360 * NUM_FRAMES), cz, x, color)
-    # Draw sides
-    peak = (cx, cy, cz + height)
-    corners = [
-        (cx - half_size, cy - half_size, cz),
-        (cx + half_size, cy - half_size, cz),
-        (cx + half_size, cy + half_size, cz),
-        (cx - half_size, cy + half_size, cz)
-    ]
-    for corner in corners:
-        draw_line(image, corner, peak, color, 1)  # thickness=1 for lines
+def drawLine(image, start, end, colour, thickness):
+    """
+    Or-equals all pixels in {image} that are closer to the line (between {start}
+    and {end}) than {thickness} with the {colour} value (int, 0-7).
 
-# Initialize the image array
-def initialize_image():
-    return np.zeros((NUM_FRAMES, NUM_ROWS, NUM_COLS), dtype=int)
+    All arguments are in cartesian and mm
+    """
+    plotBoolFunction(image, lambda x, y, z: point_line_dst((x, y, z), start, end) <= thickness, colour)
 
-# Convert voxel value to a string of binary digits
-def get_colour_string(voxel):
-    return f'0b{voxel:03b}'
+def drawLinePolar(image, start, end, colour, thickness):
+    """
+    Converts all arguments from polar to cartesian and then calls drawLine
+    """
+    start = cartesian(*start)
+    end = cartesian(*end)
+    thickness = px_to_mm(thickness)
+    drawLine(image, start, end, colour, thickness)
 
-# Generate the image array literal in C format
-def get_image(image):
-    image_data = ""
-    for index, ang_slice in enumerate(image):
-        slice_data = ',\n'.join(line_for_c(line) for line in ang_slice)
-        image_data += f'\t// Slice {index}\n\t{{\n{slice_data}\n\t}},\n'
-    return f'const byte image[{NUM_FRAMES}][{NUM_ROWS}][{NUM_COLS}] = {{\n{image_data}}};\n\n'
+def drawSphere(image, position, colour, radius):
+    """
+    Colours all points that are closer to {position} than {radius},
+    resulting in a sphere
+    """
+    plotBoolFunction(image, lambda x, y, z: point_dst_3d(position, (x, y, z)) <= radius, colour)
 
-# Convert a line of voxel data to a C array literal
-def line_for_c(line):
-    return '\t\t{' + ', '.join(get_colour_string(voxel) for voxel in line) + '}'
+def drawSpherePolar(image, position, colour, radius):
+    """
+    Converts all arguments from polar to cartesian and then calls drawSphere
+    """
+    position = cartesian(*position)
+    radius = px_to_mm(radius)
+    drawSphere(image, position, colour, radius)
 
-# Read the template file and append the generated image array
-def get_program(image):
-    image_array_literal = get_image(image)
-    with open(template_path, 'r') as file:
-        template_code = file.read()
-    return '#include <SPI.h>\n\n' + image_array_literal + template_code
+def hollowSphere(image, position, colour, inner_r, outer_r):
+    """
+    Plot a sphere that is hollow. Save in {image}, middle of sphere is
+    {position}, everything between {inner_r} and {outer_r} is coloured
+    """
+    plotBoolFunction(image, lambda x, y, z: inner_r <= point_dst_3d(position, (x, y, z)) <= outer_r, colour)
 
-# Write the final Arduino sketch to a file
-def write_sketch(image, name):
-    program = get_program(image)
-    output_dir = f'output_sketches/{name}'
-    os.makedirs(output_dir, exist_ok=True)
-    file_path = os.path.join(output_dir, f'{name}.ino')
-    with open(file_path, 'w') as file:
-        file.write(program)
-    print(f'Wrote sketch to {file_path}')
+def hollowSpherePolar(image, position, colour, inner_r, outer_r):
+    inner_r, outer_r = (px_to_mm(inner_r), px_to_mm(outer_r))
+    position = cartesian(*position)
+    hollowSphere(image, position, colour, inner_r, outer_r)
 
-# Main function to generate and write an Arduino sketch
+def plotColourFunction(image, function):
+    """
+    Plot a function (x, y, z) [mm] -> colour [0-7]
+    """
+    for (angle, height, radius), value in np.ndenumerate(image):
+        image[angle][height][radius] |= function(*cartesian(angle, height, radius))
+
+def plotBoolFunction(image, function, colour):
+    """
+    Plot a function (x, y, z) [mm] -> {true, false}
+    """
+    for (angle, height, radius), value in np.ndenumerate(image):
+        if function(*cartesian(angle, height, radius)):
+            image[angle][height][radius] |= colour
+
+def realFunction(image, func, colour):
+    """
+    Plots a function (x, y) [mm] -> z [pixels]
+    """
+    for angle in range(25):  # Adjusted for the new angle range
+        for radius in range(4):  # Adjusted radius range to 4
+            x, y, z = cartesian(angle, 0, radius)
+            z = int(func(x, y))
+            if z in range(4):  # Adjusted height range to 4
+                image[angle][z][radius] |= colour
+
+def fadenbild_bruteforce(image, radius, interval, twist, colour, thickness):
+    """
+    Plots a 'fadenbild', where two circles are connected by a number of lines
+    (strings) and are twisted with respect to each other
+    """
+    for i in range(0, 25, interval):  # Adjusted for the new angle range
+        drawLinePolar(image, (i, 0, radius), ((i + twist) % 25, 3, radius), colour, thickness)  # Adjusted height to 3
+
+def drawSurface(image, surface_params, colour, thickness):
+    """
+    Plot a surface on {image} defined by {a}x + {b}y + {c}z = d
+    where (a, b, c, d) = surface_params
+    {colour} = color of the surface (0-7)
+    {thicknes} = guess what [mm]
+    """
+    (a, b, c, d) = surface_params
+    limit = 0.5 * thickness
+
+    for (angle, height, radius), value in np.ndenumerate(image):
+        (x, y, z) = cartesian(angle, height, radius)
+        if abs((a * x) + (b * y) + (c * z) - d) < limit:
+            image[angle][height][radius] |= colour
+
+def drawSurfacePx(image, surface_params, colour, thickness):
+    (a, b, c, d) = surface_params
+    drawSurface(image, (a, b, c, px_to_mm(d)), colour, px_to_mm(thickness))
+
+def connectCircle(image, pointList, colour, thickness):
+    """
+    Connect each given point to the next one using drawLine, including
+    the last one to the first one.
+    image: ndarray of 3d image as given by getImage()
+    pointList: List of cartesian points :: [(int, int, int)]
+    colour/thickness: Same as drawLine
+    """
+    for (start, end) in zip(pointList, pointList[1:]):
+        drawLine(image, start, end, colour, thickness)
+    drawLine(image, pointList[-1], pointList[0], colour, thickness)
+
+def connectCirclePolar(image, pointList, colour, thickness):
+    """
+    Same as connectCircle, but with polar coordinates instead of
+    cartesian ones
+    """
+    for (start, end) in zip(pointList, pointList[1:]):
+        drawLinePolar(image, start, end, colour, thickness)
+    drawLinePolar(image, pointList[-1], pointList[0], colour, thickness)
+
+def connectAll(image, pointList, colour, thickness):
+    """
+    Connect every given point with every other one.
+    SNAIL ALARM: O(n^2)
+    """
+    for (start, end) in combinations(pointList, 2):
+        drawLine(image, start, end, colour, thickness)
+
+def connectAllPolar(image, pointList, colour, thickness):
+    for (start, end) in combinations(pointList, 2):
+        drawLinePolar(image, start, end, colour, thickness)
+
+def drawCuboid(image, point, oppositePoint, colour, thickness):
+    """
+    Draw a cuboid, aligned to the cartesian axes, between {point} and
+    {oppositePoint}.
+    """
+    (x0, y0, z0) = point
+    (x1, y1, z1) = oppositePoint
+
+    bottom = [(x0, y0, z0), (x0, y1, z0), (x1, y1, z0), (x1, y0, z0)]
+    top    = [(x0, y0, z1), (x0, y1, z1), (x1, y1, z1), (x1, y0, z1)]
+
+    connectCircle(image, bottom, colour, thickness)
+    connectCircle(image, top, colour, thickness)
+
+    for (b, t) in zip(bottom, top):
+        drawLine(image, b, t, colour, thickness)
+
+def drawCuboidPolar(image, point, oppositePoint, colour, thickness):
+    point, oppositePoint = cartesian(*point), cartesian(*oppositePoint)
+    thickness = px_to_mm(thickness)
+    drawCuboid(image, point, oppositePoint, colour, thickness)
+
+### end drawing ###
+
+### start metaprogramming ###
+
+def getColourString(voxel):
+    """
+    Get a fixed-width binary string representation
+    """
+    assert (voxel <= 7), 'Only the last 3 bits may be set'
+    return '{0:03b}'.format(voxel)
+
+def printImage(image):
+    """
+    Print C representation of image
+    """
+    print(getImage(image))
+
+def getImage(image):
+    """
+    Generate C array literal representing the image
+    """
+    startString = 'const byte image[25][4][8] = {\n'  # Adjusted dimensions
+    endString = '\n};\n\n'
+    return startString + '\n'.join(sliceForC(sl, i) for i, sl in enumerate(image)) + endString
+
+def getProgram(image):
+    """
+    Generates image array literal, appends template file to it, returns that
+    """
+    with open(template_path, 'r') as infile:
+        lines = infile.readlines()
+
+    preprocessor = '#include <SPI.h>\n\n'
+    imageArrayLiteral = getImage(image)
+    program = ''.join(lines)
+
+    return preprocessor + imageArrayLiteral + program
+
+def sliceForC(angSlice, index):
+    """
+    Get a slice of the image as a C array literal
+    """
+    startString = '\t// Slice {0:02}\n\t{{\n'.format(index)
+    endString = '\n\t}'
+    if index != 24:
+        endString += ',\n'
+    return startString + ',\n'.join(lineForC(line) for line in angSlice) + endString
+
+def lineForC(line):
+    """
+    Get a line of the image as a C array literal
+    """
+    # Get a string representation of the binary data for that LED row
+    colourString = ''.join([getColourString(voxel) for voxel in line])
+    assert len(colourString) == 24, "Length of colourString is {}, should be 24".format(len(colourString))
+
+    # Print them in chunks of 8 so that they're one byte in C
+    cByteLiterals = ['0b' + i for i in chunks(colourString, 8)]
+    return '\t\t{' + ', '.join(cByteLiterals) + '}'
+
+def chunks(string, chunksize):
+    """
+    Splits a string in chunks of given length
+    """
+    return [string[i:i+chunksize] for i in range(0, len(string), chunksize)]
+
+def writeSketch(image, name):
+    """
+    Uses all of the above methods to get the Arduino program with the given image,
+    and writes that to ./$name/$name.ino
+    """
+    dirname = os.path.join(output_dir, name.replace('.ino', ''))
+
+    try:
+        os.makedirs(dirname)
+    except OSError:
+        print('Directory already exists. Delete it or choose another name.')
+        return
+
+    if not name.endswith('.ino'):
+        name += '.ino'
+
+    filepath = os.path.join(dirname, name)
+    with open(filepath, 'w') as outfile:
+        outfile.write(getProgram(image))
+        print('Wrote sketch to ./' + filepath)
+
+### end metaprogramming ###
+
 def main():
-    img = initialize_image()
-    # You can call draw functions here to modify the `img` array as needed
-    write_sketch(img, '3D_POV_Display')
+    img = newImage()
+    
+    # Example: Draw a sphere
+    drawSphere(img, (12, 2, 1), red, 4)  # Adjusted for 25 frames
+    
+    # Example: Draw a cuboid
+    drawCuboid(img, (5, 1, 0), (20, 3, 2), blue, 2)  # Adjusted for 25 frames
+    
+    # Example: Draw a hollow sphere
+    hollowSphere(img, (12, 2, 1), green, 2, 4)  # Adjusted for 25 frames
+    
+    # Example: Fadenbild pattern
+    fadenbild_bruteforce(img, 1, 3, 10, yellow, 1)
+    
+    # Optional: Visualize the image for debugging
+    printImage(img)
+    
+    writeSketch(img, '3D_POV_Display')
 
 if __name__ == '__main__':
     main()
