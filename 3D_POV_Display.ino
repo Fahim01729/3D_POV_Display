@@ -1,308 +1,345 @@
-#include <Arduino.h>
 #include <SPI.h>
 
-// Define the pin connections and settings
-const int DATA_PIN = 11;
-const int CLOCK_PIN = 13;
-const int HALL_SENSOR_PIN = 2;  // Hall sensor for detecting the magnet position
+const byte image[25][4][8] = {
+	// Slice 00
+	{
+		{0b11111011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
+	},
 
-// LED Display configuration
-const int NUM_FRAMES = 25;
-const int NUM_ROWS = 7;
-const int NUM_COLS = 8;
+	// Slice 01
+	{
+		{0b11111011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
+	},
 
+	// Slice 02
+	{
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
+	},
 
+	// Slice 03
+	{
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
+	},
 
-// SPI settings for SK9822 (adjust clock speed as necessary for your setup)
-SPISettings spiSettings(12000000, MSBFIRST, SPI_MODE0);
+	// Slice 04
+	{
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
+	},
 
-// Variables for frame timing and synchronization
-volatile int currentFrame = 0;
-volatile bool newFrameReady = false;
+	// Slice 05
+	{
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
+	},
 
-const byte image[25][7][8] = {
-	// Slice 0
+	// Slice 06
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
-	// Slice 1
+
+	// Slice 07
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
-	// Slice 2
+
+	// Slice 08
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
-	// Slice 3
+
+	// Slice 09
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
-	// Slice 4
-	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
-	},
-	// Slice 5
-	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
-	},
-	// Slice 6
-	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
-	},
-	// Slice 7
-	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
-	},
-	// Slice 8
-	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
-	},
-	// Slice 9
-	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
-	},
+
 	// Slice 10
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 11
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 12
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 13
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 14
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 15
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 16
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 17
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 18
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 19
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 20
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 21
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 22
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 23
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
 	},
+
 	// Slice 24
 	{
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000},
-		{0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000, 0b000}
-	},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000},
+		{0b11011011, 0b01100000, 0b00000000}
+	}
 };
 
-void setup() {
-  pinMode(HALL_SENSOR_PIN, INPUT_PULLUP);
-  SPI.begin();
 
-  // Attach an interrupt to the hall sensor pin
-  attachInterrupt(digitalPinToInterrupt(HALL_SENSOR_PIN), onMagnetDetected, FALLING);
+// Settings
+const bool isRotating = false;   // Determines if the image should rotate
+const bool hasWaterfallEffect = false;  // Determines if the image should have a waterfall effect
+
+// Timing variables
+volatile float timePerPixel;         // Microseconds per pixel, determines the timing for LED refresh
+volatile float nextPixelTime = 0;    // When to refresh the next pixel
+volatile bool isInterrupted = false;     // Flag to indicate if an interrupt has occurred
+volatile int32_t currentPixelIndex = 0;     // Current pixel position
+volatile int32_t initialPixelIndex = 0;       // Starting pixel position
+volatile unsigned long lastMagnetTime; // Time when the last magnet was detected
+volatile bool isRunning = false;         // Flag to indicate if the system is running
+
+// Board/LED variables
+volatile uint32_t pixelOffset = 0;     // Offset for pixel position calculation
+volatile uint32_t currentBoardIndex = 0;    // Current board being addressed
+volatile uint32_t boardPositionOffset = 0;     // Offset for the board position, changes each revolution
+volatile uint32_t boardOffset;         // Calculated offset for the board
+volatile uint32_t alternateRotation = false;// Flag for alternating rotations
+
+const uint32_t hallSensorPin = 2;            // Pin connected to the Hall sensor
+
+SPISettings spiConfig(8000000, MSBFIRST, SPI_MODE0); // SPI configuration: 8 MHz, MSB first
+
+void setup(void) {
+    pinMode(hallSensorPin, INPUT_PULLUP);    // Set hallSensorPin as input with internal pull-up resistor
+
+    SPI.begin();                       // Initialize SPI communication
+
+    Serial.begin(9600);                // Start serial communication for debugging
+
+    // Attach interrupt to the Hall sensor pin, calling handleTimerInterrupt on falling edge
+    attachInterrupt(digitalPinToInterrupt(hallSensorPin), handleTimerInterrupt, FALLING);
+
+    lastMagnetTime = micros();       // Record the current time
 }
 
-void loop() {
-  if (newFrameReady) {
-    updateLEDs();
-    newFrameReady = false;
-  }
-}
-
-void onMagnetDetected() {
-  // Increment frame index and wrap around if necessary
-  currentFrame = (currentFrame + 1) % NUM_FRAMES;
-  newFrameReady = true;
-}
-
-void updateLEDs() {
-  SPI.beginTransaction(spiSettings);
-
-  // Send the data for the current frame
-  for (int row = 0; row < NUM_ROWS; row++) {
-    for (int col = 0; col < NUM_COLS; col++) {
-      SPI.transfer(image[currentFrame][row][col]);
+void loop(void) {
+    // Continuously check if we should refresh the LED data
+    if (isRunning && (micros() - lastMagnetTime > nextPixelTime)) {
+        refreshLEDs();
     }
-  }
+}
 
-  SPI.endTransaction();
+// Interrupt service routine called by Hall sensor
+void handleTimerInterrupt(void) {
+    isInterrupted = true;              // Set interrupted flag
+    isRunning = true;                  // Set running flag
+
+    // Calculate the new pixel duration
+    timePerPixel = ((float)(micros() - lastMagnetTime)) / 25.0; // Adjusted for 25 frames
+
+    // Reset timer & prepare for the next LED refresh
+    lastMagnetTime = micros();
+    nextPixelTime = 0;
+    currentPixelIndex = initialPixelIndex;       // Set currentPixelIndex to initialPixelIndex
+
+    if (hasWaterfallEffect && alternateRotation) { // If waterfall effect is enabled
+        if (boardPositionOffset == 0) {
+            boardPositionOffset = 8;
+        }
+        boardPositionOffset--;
+    }
+
+    alternateRotation = !alternateRotation;    // Toggle alternateRotation flag
+
+    if (isRotating) {                  // If rotating effect is enabled
+        initialPixelIndex++;
+        initialPixelIndex %= 25;
+    }
+}
+
+// Function to send data to the LEDs
+void refreshLEDs(void) {
+    isInterrupted = false;            // Reset interrupted flag
+
+    SPI.beginTransaction(spiConfig); // Start SPI transaction
+
+    // Send data to all boards
+    for (int i = 0; i < 4; i++) { // Adjusted for 8 LEDs on 4 boards
+        if (isInterrupted) break;    // Exit if interrupted
+
+        // Update currentBoardIndex and boardOffset
+        currentBoardIndex = 2 * i;
+        boardOffset = (currentBoardIndex + boardPositionOffset) % 4;
+        pixelOffset = (currentPixelIndex + 5 * i + 25) % 25;
+
+        sendFrame();                // Send frame for the current board
+
+        if (isInterrupted) break;    // Exit if interrupted
+
+        // Update for the next half of the board
+        currentBoardIndex++;
+        boardOffset = (currentBoardIndex + boardPositionOffset) % 4;
+        pixelOffset = (currentPixelIndex + 8) % 25; // Adjusted for 8 LEDs per board
+
+        sendFrame();                // Send frame for the current board
+    }
+
+    SPI.endTransaction();           // End SPI transaction
+
+    // Update timing variables if not interrupted
+    if (!isInterrupted) {
+        currentPixelIndex++;
+        nextPixelTime += timePerPixel;
+    }
+}
+
+// Function to send a single frame to the LEDs
+void sendFrame(void) {
+    // Send start frame
+    SPI.transfer(0x00);
+    SPI.transfer(0x00);
+    SPI.transfer(0x00);
+    SPI.transfer(0x00);
+
+    // Send pixel data
+    for (int j = 3; j >= 0; j--) {  // Adjusted height to 4
+        for (int k = 7; k >= 0; k--) { // Adjusted for 8 LEDs
+            sendPixelData(image[pixelOffset][j][k]);
+        }
+    }
+
+    // Send end frame
+    SPI.transfer(0xFF);
+    SPI.transfer(0xFF);
+    SPI.transfer(0xFF);
+    SPI.transfer(0xFF);
+}
+
+// Function to send a single pixel's data to SK9822
+void sendPixelData(uint8_t color) {
+    // SK9822 format: Start frame + Color data + End frame
+    SPI.transfer(0xE0 | 0x0F); // Start frame with brightness at 50% (0x0F)
+    SPI.transfer(color);       // Send color data
+
+    // Debugging: Print the color being sent
+    Serial.print("Color sent: 0x");
+    Serial.println(color, HEX);
 }
