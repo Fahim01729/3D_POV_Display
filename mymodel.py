@@ -5,7 +5,7 @@ import os
 
 # Directory to store the output sketches
 output_directory = 'output_files'
-template_file = '3D_POV_Display_template.cpp.in'  # Ensure this path is correct
+template_file = '3D_POV_Display.cpp.in'  # Ensure this path is correct
 
 # Color values
 COLOR_BLACK  = 0b000
