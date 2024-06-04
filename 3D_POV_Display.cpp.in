@@ -1,5 +1,3 @@
-#include <SPI.h>
-
 // Settings
 const bool isRotating = false;   // Determines if the image should rotate
 const bool hasWaterfallEffect = false;  // Determines if the image should have a waterfall effect
